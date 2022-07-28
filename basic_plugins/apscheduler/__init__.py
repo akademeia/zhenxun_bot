@@ -6,7 +6,6 @@ from models.group_info import GroupInfo
 from models.friend_user import FriendUser
 from nonebot.adapters.onebot.v11 import ActionFailed
 from configs.config import NICKNAME, Config
-from utils.manager import group_manager
 from pathlib import Path
 import shutil
 
@@ -42,7 +41,7 @@ Config.add_plugin_config(
 )
 
 
-cx = on_message(priority=9, block=False)
+cx = on_message(priority=9999, block=False, rule=lambda: False)
 
 
 # 早上好

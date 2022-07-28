@@ -235,17 +235,82 @@ python bot.py
 
 
 ## 使用Docker
-__Docker 最新版本由 [Sakuracio](https://github.com/Sakuracio) 提供__
-#### GitHub：[Sakuracio/zhenxun_bot_docker](https://github.com/Sakuracio/zhenxun_bot_docker)
-#### DockerHub：[hibikier/zhenxun_bot](https://hub.docker.com/r/hibikier/zhenxun_bot)
-
-
+__Docker 单机版（仅真寻Bot）__  
+**点击下方的 GitHub 徽标查看教程**  
+[![Github](https://shields.io/badge/GITHUB-Sakuracio-4476AF?logo=github&style=for-the-badge)](https://github.com/Sakuracio/zhenxun_bot_docker)  
+[![DOCKER](https://shields.io/badge/docker-hibikier/zhenxun_bot-4476AF?logo=docker&style=for-the-badge)](https://hub.docker.com/r/hibikier/zhenxun_bot)  
+__Docker 全量版（包含 真寻Bot PostgreSQL数据库 go-cqhttp webui等）__  
+[![Github](https://shields.io/badge/GITHUB-SinKy--Yan-4476AF?logo=github&style=for-the-badge)](https://github.com/SinKy-Yan/zhenxunbot-docker)  
+[![DOCKER](https://shields.io/badge/docker-jyishit/zhenxun_bot-4476AF?logo=docker&style=for-the-badge)](https://hub.docker.com/r/jyishit/zhenxun_bot)  
+**点击上方的 GitHub 徽标查看教程**  
+PS: **ARM平台** 请使用全量版 同时 **如果你的机器 RAM < 1G 可能无法正常启动全量版容器**
 
 ## 更新
 
+### 2022/7/24 \[v0.1.6.2]
+
+* 订阅up动态提供直链
+
+### 2022/7/23
+
+* 优化开箱次数判断
+
+### 2022/7/16
+
+* cos提供连发命令
+* 修复B站视频解析中b23解析错误
+
+### 2022/7/13
+
+* B站订阅提供配置项`LIVE_MSG_AT_ALL`,`UP_MSG_AT_ALL`：控制UP动态投稿和直播是否AT全体
+* 修改了Omega图库检测的数据库文件名
+* game_utils提供了Game类
+
+### 2022/7/7
+
+* 微博热搜选择单条热搜时也会检测时效性 [@pull/891](https://github.com/HibiKier/zhenxun_bot/pull/891)
+
+### 2022/7/4
+
+* 修复商品未设置限购时无法购买
+* 修复B站订阅UP动态 [@pull/886](https://github.com/HibiKier/zhenxun_bot/pull/886)
+* 修复色图命令带tag时配置项`MAX_ONCE_NUM2FORWARD`无法生效
+
+### 2022/7/3 \[v0.1.6.1]
+
+* BagUser提供方法`check_props`方法，用于判断用户是否含有该道具并是否使用
+* 优化商品显示图片，提供限制，限购，折扣提示
+* 修复图库内图片无法被连续删除的问题 [@pull/879](https://github.com/HibiKier/zhenxun_bot/pull/879)
+* 色图提供配置项`MAX_ONCE_NUM2FORWARD`：群聊中单次发送图片数量达到指定时使用合并转发
+* 优化修复了商品修改命令
+* B站订阅UP动态改为详情页截图
+
+### 2022/6/28
+
+* 修复色图插件api修改无法搜索图片 [@pull/866](https://github.com/HibiKier/zhenxun_bot/pull/866)
+
+### 2022/6/26
+
+* 替换了bt URL
+* PIX当使用pid查询图片时，会发送该pid下所有图片
+* 商店提供了每日购买次数限制
+
+### 2022/6/24
+
+* 对WSL虚拟机 代理 添加写法 [@pull/847](https://github.com/HibiKier/zhenxun_bot/pull/847)
+
+### 2022/6/21
+
+* update parse_bilibili [@pull/840](https://github.com/HibiKier/zhenxun_bot/pull/840)
+
+### 2022/6/19 \[v0.1.6.0]
+
+* 暂时使用hook修复webui中plugins2setting修改时会改变plugins2setting.cmd为字符串
+* 修复原神树脂重复提醒的bug [@pull/828](https://github.com/HibiKier/zhenxun_bot/pull/828)
+* 词条优化问题展示,修改含机器人昵称和@逻辑 [@pull/835](https://github.com/HibiKier/zhenxun_bot/pull/835)
+
 ### 2022/6/18
 
-* 修复webui中plugins2setting修改时会改变plugins2setting.cmd为字符串
 * 修复昵称系统`BLACK_WORD`为空时造成报错
 * 修复特殊头像时背景透明化出错
 * 修复text2image纯文本时换行时颜色不统一
@@ -512,7 +577,7 @@ __Docker 最新版本由 [Sakuracio](https://github.com/Sakuracio) 提供__
 * 修复点歌无法正确发送
 * 修复我有一个朋友有时文本会包含CQ码
 * 修复群欢消息被动控制文本未删除 [@pull/124](https://github.com/HibiKier/zhenxun_bot/pull/124)
-* message_builder.image不再提供参数：abspath
+* message_builder.image不再提供参数:abspath
 
 ### 2022/2/23
 
@@ -649,9 +714,12 @@ __Docker 最新版本由 [Sakuracio](https://github.com/Sakuracio) 提供__
 
 __..... 更多更新信息请查看文档__
 
-
 ## Todo
 - [ ] web管理
+
+## 爱发电
+
+<img width="365px" height="450px" src="https://user-images.githubusercontent.com/45528451/175059389-cfeb8174-fa07-4939-80ab-a039087a50f6.png">
 
 ## 感谢
 [botuniverse / onebot](https://github.com/botuniverse/onebot) ：超棒的机器人协议  
