@@ -8,11 +8,8 @@
       "configs/path_config.py",
       "configs/utils",
       "poetry.lock",
-      "pyproject.toml",
-      "resources/font",
-      "resources/image/zhenxun",
-      "resources/image/other"
+      "pyproject.toml"
     ],
-    "add_file": [],
+    "add_file": ["resources/image/csgo_cases"],
     "delete_file": []
 }

@@ -1,51 +1,14 @@
+import time
+from typing import List, Optional, Tuple, Union
+
 from PIL import Image
 
-from models.goods_info import GoodsInfo
-from utils.image_utils import BuildImage
-from models.sign_group_user import SignGroupUser
-from utils.utils import is_number
 from configs.path_config import IMAGE_PATH
-from typing import Optional, Union, Tuple
-from configs.config import Config
-from nonebot import Driver
-from nonebot.plugin import require
-from utils.decorator.shop import shop_register
-import nonebot
-import time
+from models.goods_info import GoodsInfo
+from utils.image_utils import BuildImage, text2image
+from utils.utils import GDict, is_number
 
-driver: Driver = nonebot.get_driver()
-
-
-use = require("use")
-
-
-@driver.on_startup
-async def init_default_shop_goods():
-    """
-    导入内置的三个商品
-    """
-
-    @shop_register(
-        name=("好感度双倍加持卡Ⅰ", "好感度双倍加持卡Ⅱ", "好感度双倍加持卡Ⅲ"),
-        price=(30, 150, 250),
-        des=(
-            "下次签到双倍好感度概率 + 10%（谁才是真命天子？）（同类商品将覆盖）",
-            "下次签到双倍好感度概率 + 20%（平平庸庸）（同类商品将覆盖）",
-            "下次签到双倍好感度概率 + 30%（金币才是真命天子！）（同类商品将覆盖）",
-        ),
-        load_status=Config.get_config("shop", "IMPORT_DEFAULT_SHOP_GOODS"),
-        daily_limit=(10, 20, 30),
-        ** {"好感度双倍加持卡Ⅰ_prob": 0.1, "好感度双倍加持卡Ⅱ_prob": 0.2, "好感度双倍加持卡Ⅲ_prob": 0.3},
-    )
-    async def sign_card(user_id: int, group_id: int, prob: float):
-        user = await SignGroupUser.ensure(user_id, group_id)
-        await user.update(add_probability=prob).apply()
-
-
-@driver.on_bot_connect
-async def _():
-    await shop_register.load_register()
-
+icon_path = IMAGE_PATH / "shop_icon"
 
 # 创建商店界面
 async def create_shop_help() -> str:
@@ -54,44 +17,52 @@ async def create_shop_help() -> str:
     :return: 图片base64
     """
     goods_lst = await GoodsInfo.get_all_goods()
-    idx = 1
     _dc = {}
     font_h = BuildImage(0, 0).getsize("正")[1]
     h = 10
-    _list = []
+    _list: List[GoodsInfo] = []
     for goods in goods_lst:
         if goods.goods_limit_time == 0 or time.time() < goods.goods_limit_time:
-            h += len(goods.goods_description.strip().split("\n")) * font_h + 80
             _list.append(goods)
-    A = BuildImage(1000, h, color="#f9f6f2")
-    current_h = 0
+    # A = BuildImage(1100, h, color="#f9f6f2")
     total_n = 0
-    for goods in _list:
-        bk = BuildImage(1180, 80, font_size=15, color="#f9f6f2", font="CJGaoDeGuo.otf")
-        goods_image = BuildImage(
-            600, 80, font_size=20, color="#a29ad6", font="CJGaoDeGuo.otf"
-        )
+    image_list = []
+    for idx, goods in enumerate(_list):
         name_image = BuildImage(
             580, 40, font_size=25, color="#e67b6b", font="CJGaoDeGuo.otf"
         )
         await name_image.atext(
-            (15, 0), f"{idx}.{goods.goods_name}", center_type="by_height"
+            (15, 0), f"{idx + 1}.{goods.goods_name}", center_type="by_height"
         )
         await name_image.aline((380, -5, 280, 45), "#a29ad6", 5)
         await name_image.atext((390, 0), "售价：", center_type="by_height")
         if goods.goods_discount != 1:
             discount_price = int(goods.goods_discount * goods.goods_price)
-            old_price_image = BuildImage(0, 0, plain_text=str(goods.goods_price), font_color=(194, 194, 194), font="CJGaoDeGuo.otf", font_size=15)
-            await old_price_image.aline((0, int(old_price_image.h / 2), old_price_image.w + 1, int(old_price_image.h / 2)), (0, 0, 0))
-            await name_image.apaste(
-                old_price_image, (440, 0), True
+            old_price_image = BuildImage(
+                0,
+                0,
+                plain_text=str(goods.goods_price),
+                font_color=(194, 194, 194),
+                font="CJGaoDeGuo.otf",
+                font_size=15,
             )
-            await name_image.atext(
-                (440, 15), str(discount_price), (255, 255, 255)
+            await old_price_image.aline(
+                (
+                    0,
+                    int(old_price_image.h / 2),
+                    old_price_image.w + 1,
+                    int(old_price_image.h / 2),
+                ),
+                (0, 0, 0),
             )
+            await name_image.apaste(old_price_image, (440, 0), True)
+            await name_image.atext((440, 15), str(discount_price), (255, 255, 255))
         else:
             await name_image.atext(
-                (440, 0), str(goods.goods_price), (255, 255, 255), center_type="by_height"
+                (440, 0),
+                str(goods.goods_price),
+                (255, 255, 255),
+                center_type="by_height",
             )
         await name_image.atext(
             (
@@ -102,13 +73,58 @@ async def create_shop_help() -> str:
             f" 金币",
             center_type="by_height",
         )
+        des_image = None
+        font_img = BuildImage(
+            600, 80, font_size=20, color="#a29ad6", font="CJGaoDeGuo.otf"
+        )
+        p = font_img.getsize("简介：")[0] + 20
+        if goods.goods_description:
+            des_list = goods.goods_description.split("\n")
+            desc = ""
+            for des in des_list:
+                if font_img.getsize(des)[0] > font_img.w - p - 20:
+                    msg = ""
+                    tmp = ""
+                    for i in range(len(des)):
+                        if font_img.getsize(tmp)[0] < font_img.w - p - 20:
+                            tmp += des[i]
+                        else:
+                            msg += tmp + "\n"
+                            tmp = des[i]
+                    desc += msg
+                    if tmp:
+                        desc += tmp
+                else:
+                    desc += des + "\n"
+            if desc[-1] == "\n":
+                desc = desc[:-1]
+            des_image = await text2image(desc, color="#a29ad6")
+        goods_image = BuildImage(
+            600,
+            (50 + des_image.h) if des_image else 50,
+            font_size=20,
+            color="#a29ad6",
+            font="CJGaoDeGuo.otf",
+        )
+        if des_image:
+            await goods_image.atext((15, 50), "简介：")
+            await goods_image.apaste(des_image, (p, 50))
         await name_image.acircle_corner(5)
         await goods_image.apaste(name_image, (0, 5), True, center_type="by_width")
-        await goods_image.atext((15, 50), f"简介：{goods.goods_description}")
         await goods_image.acircle_corner(20)
-        await bk.apaste(goods_image, alpha=True)
+        bk = BuildImage(
+            1180,
+            (50 + des_image.h) if des_image else 50,
+            font_size=15,
+            color="#f9f6f2",
+            font="CJGaoDeGuo.otf",
+        )
+        if goods.icon and (icon_path / goods.icon).exists():
+            icon = BuildImage(70, 70, background=icon_path / goods.icon)
+            await bk.apaste(icon)
+        await bk.apaste(goods_image, (70, 0), alpha=True)
         n = 0
-        _w = 550
+        _w = 650
         # 添加限时图标和时间
         if goods.goods_limit_time > 0:
             n += 140
@@ -132,7 +148,9 @@ async def create_shop_help() -> str:
             _w += 140
         if goods.goods_discount != 1:
             n += 140
-            _discount_logo = BuildImage(30, 30, background=f"{IMAGE_PATH}/other/discount.png")
+            _discount_logo = BuildImage(
+                30, 30, background=f"{IMAGE_PATH}/other/discount.png"
+            )
             await bk.apaste(_discount_logo, (_w + 50, 10), True)
             await bk.apaste(
                 BuildImage(0, 0, plain_text="折扣！", font_size=23, font="CJGaoDeGuo.otf"),
@@ -140,14 +158,23 @@ async def create_shop_help() -> str:
                 True,
             )
             await bk.apaste(
-                BuildImage(0, 0, plain_text=f"{10 * goods.goods_discount:.1f} 折", font_size=30, font="CJGaoDeGuo.otf", font_color=(85, 156, 75)),
+                BuildImage(
+                    0,
+                    0,
+                    plain_text=f"{10 * goods.goods_discount:.1f} 折",
+                    font_size=30,
+                    font="CJGaoDeGuo.otf",
+                    font_color=(85, 156, 75),
+                ),
                 (_w + 50, 44),
                 True,
             )
             _w += 140
         if goods.daily_limit != 0:
             n += 140
-            _daily_limit_logo = BuildImage(35, 35, background=f"{IMAGE_PATH}/other/daily_limit.png")
+            _daily_limit_logo = BuildImage(
+                35, 35, background=f"{IMAGE_PATH}/other/daily_limit.png"
+            )
             await bk.apaste(_daily_limit_logo, (_w + 50, 10), True)
             await bk.apaste(
                 BuildImage(0, 0, plain_text="限购！", font_size=23, font="CJGaoDeGuo.otf"),
@@ -155,21 +182,35 @@ async def create_shop_help() -> str:
                 True,
             )
             await bk.apaste(
-                BuildImage(0, 0, plain_text=f"{goods.daily_limit}", font_size=30, font="CJGaoDeGuo.otf"),
+                BuildImage(
+                    0,
+                    0,
+                    plain_text=f"{goods.daily_limit}",
+                    font_size=30,
+                    font="CJGaoDeGuo.otf",
+                ),
                 (_w + 72, 45),
                 True,
             )
         if total_n < n:
             total_n = n
         if n:
-            await bk.aline((550, -1, 550 + n, -1), "#a29ad6", 5)
-            await bk.aline((550, 80, 550 + n, 80), "#a29ad6", 5)
+            await bk.aline((650, -1, 650 + n, -1), "#a29ad6", 5)
+            # await bk.aline((650, 80, 650 + n, 80), "#a29ad6", 5)
 
         # 添加限时图标和时间
-        idx += 1
-        await A.apaste(bk, (0, current_h), True)
-        current_h += 90
-    w = 850
+        image_list.append(bk)
+        # await A.apaste(bk, (0, current_h), True)
+        # current_h += 90
+    h = 0
+    current_h = 0
+    for img in image_list:
+        h += img.h + 10
+    A = BuildImage(1100, h, color="#f9f6f2")
+    for img in image_list:
+        await A.apaste(img, (0, current_h), True)
+        current_h += img.h + 10
+    w = 950
     if total_n:
         w += total_n
     h = A.h + 230 + 100
@@ -197,6 +238,8 @@ async def register_goods(
     discount: Optional[float] = 1,
     limit_time: Optional[int] = 0,
     daily_limit: Optional[int] = 0,
+    is_passive: Optional[bool] = False,
+    icon: Optional[str] = None,
 ) -> bool:
     """
     添加商品
@@ -209,24 +252,34 @@ async def register_goods(
     :param discount: 商品折扣
     :param limit_time: 商品限时销售时间，单位为小时
     :param daily_limit: 每日购买次数限制
+    :param is_passive: 是否为被动
+    :param icon: 图标
     :return: 是否添加成功
     """
-    if not await GoodsInfo.get_goods_info(name):
-        limit_time = float(limit_time) if limit_time else limit_time
+    if not await GoodsInfo.get_or_none(goods_name=name):
+        limit_time_ = float(limit_time) if limit_time else limit_time
         discount = discount if discount is not None else 1
-        limit_time = (
-            int(time.time() + limit_time * 60 * 60)
-            if limit_time is not None and limit_time != 0
+        limit_time_ = (
+            int(time.time() + limit_time_ * 60 * 60)
+            if limit_time_ is not None and limit_time_ != 0
             else 0
         )
-        return await GoodsInfo.add_goods(
-            name, int(price), des, float(discount), limit_time, daily_limit
+        await GoodsInfo.create(
+            goods_name=name,
+            goods_price=int(price),
+            goods_description=des,
+            goods_discount=float(discount),
+            goods_limit_time=limit_time_,
+            daily_limit=daily_limit,
+            is_passive=is_passive,
+            icon=icon,
         )
+        return True
     return False
 
 
 # 删除商品
-async def delete_goods(name: str, id_: int) -> "str, str, int":
+async def delete_goods(name: str, id_: int) -> Tuple[str, str, int]:
     """
     删除商品
     :param name: 商品名称
@@ -247,6 +300,7 @@ async def delete_goods(name: str, id_: int) -> "str, str, int":
             return f"删除商品 {name} 成功！", name, 200
         else:
             return f"删除商品 {name} 失败！", name, 999
+    return "获取商品失败", "", 999
 
 
 # 更新商品信息
@@ -263,7 +317,7 @@ async def update_goods(**kwargs) -> Tuple[bool, str, str]:
                 return False, "序号错误，没有该序号的商品...", ""
             goods = goods_lst[int(kwargs["name"]) - 1]
         else:
-            goods = await GoodsInfo.get_goods_info(kwargs["name"])
+            goods = await GoodsInfo.filter(goods_name=kwargs["name"]).first()
             if not goods:
                 return False, "名称错误，没有该名称的商品...", ""
         name: str = goods.goods_name
@@ -272,6 +326,7 @@ async def update_goods(**kwargs) -> Tuple[bool, str, str]:
         discount = goods.goods_discount
         limit_time = goods.goods_limit_time
         daily_limit = goods.daily_limit
+        is_passive = goods.is_passive
         new_time = 0
         tmp = ""
         if kwargs.get("price"):
@@ -285,15 +340,26 @@ async def update_goods(**kwargs) -> Tuple[bool, str, str]:
             discount = kwargs["discount"]
         if kwargs.get("limit_time"):
             kwargs["limit_time"] = float(kwargs["limit_time"])
-            new_time = time.strftime(
-                "%Y-%m-%d %H:%M:%S",
-                time.localtime(time.time() + kwargs["limit_time"] * 60 * 60),
-            ) if kwargs["limit_time"] != 0 else 0
+            new_time = (
+                time.strftime(
+                    "%Y-%m-%d %H:%M:%S",
+                    time.localtime(time.time() + kwargs["limit_time"] * 60 * 60),
+                )
+                if kwargs["limit_time"] != 0
+                else 0
+            )
             tmp += f"限时至： {new_time}\n" if new_time else "取消了限时\n"
             limit_time = kwargs["limit_time"]
         if kwargs.get("daily_limit"):
-            tmp += f'每日购买限制：{daily_limit} --> {kwargs["daily_limit"]}\n' if daily_limit else "取消了购买限制\n"
+            tmp += (
+                f'每日购买限制：{daily_limit} --> {kwargs["daily_limit"]}\n'
+                if daily_limit
+                else "取消了购买限制\n"
+            )
             daily_limit = int(kwargs["daily_limit"])
+        if kwargs.get("is_passive"):
+            tmp += f'被动道具：{is_passive} --> {kwargs["is_passive"]}\n'
+            des = kwargs["is_passive"]
         await GoodsInfo.update_goods(
             name,
             int(price),
@@ -304,9 +370,14 @@ async def update_goods(**kwargs) -> Tuple[bool, str, str]:
                 if limit_time != 0 and new_time
                 else 0
             ),
-            daily_limit
+            daily_limit,
+            is_passive,
         )
-        return True, name, tmp[:-1],
+        return (
+            True,
+            name,
+            tmp[:-1],
+        )
 
 
 def parse_goods_info(msg: str) -> Union[dict, str]:

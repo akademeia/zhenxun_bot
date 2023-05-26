@@ -1,16 +1,17 @@
-import re
 import random
-import dateparser
-from lxml import etree
-from PIL import ImageDraw
+import re
 from datetime import datetime
-from urllib.parse import unquote
 from typing import List, Optional, Tuple
-from pydantic import ValidationError
-from nonebot.adapters.onebot.v11 import Message
-from utils.message_builder import image
+from urllib.parse import unquote
+
+import dateparser
+from PIL import ImageDraw
+from lxml import etree
+from nonebot.adapters.onebot.v11 import Message, MessageSegment
 from nonebot.log import logger
-import asyncio
+from pydantic import ValidationError
+
+from utils.message_builder import image
 
 try:
     import ujson as json
@@ -26,6 +27,7 @@ from utils.image_utils import BuildImage
 class Operator(BaseData):
     recruit_only: bool  # 公招限定
     event_only: bool  # 活动获得干员
+    core_only:bool  #中坚干员
     # special_only: bool  # 升变/异格干员
 
 
@@ -53,7 +55,7 @@ class PrtsHandle(BaseHandle[Operator]):
         all_operators = [
             x
             for x in self.ALL_OPERATOR
-            if x.star == star and not any([x.limited, x.recruit_only, x.event_only])
+            if x.star == star and not any([x.limited, x.recruit_only, x.event_only,x.core_only])
         ]
         acquire_operator = None
 
@@ -104,17 +106,18 @@ class PrtsHandle(BaseHandle[Operator]):
             info = f"当前up池: {self.UP_EVENT.title}\n{info}"
         return info.strip()
 
-    async def draw(self, count: int, **kwargs) -> Message:
-        return await asyncio.get_event_loop().run_in_executor(None, self._draw, count)
-
-    def _draw(self, count: int, **kwargs) -> Message:
+    def draw(self, count: int, **kwargs) -> Message:
         index2card = self.get_cards(count)
         """这里cards修复了抽卡图文不符的bug"""
         cards = [card[0] for card in index2card]
         up_list = [x.name for x in self.UP_EVENT.up_char] if self.UP_EVENT else []
         result = self.format_result(index2card, up_list=up_list)
         pool_info = self.format_pool_info()
-        return pool_info + image(b64=self.generate_img(cards).pic2bs4()) + result
+        return (
+            pool_info
+            + image(b64=self.generate_img(cards).pic2bs4())
+            + result
+        )
 
     def generate_card_img(self, card: Operator) -> BuildImage:
         sep_w = 5
@@ -149,11 +152,16 @@ class PrtsHandle(BaseHandle[Operator]):
             Operator(
                 name=value["名称"],
                 star=int(value["星级"]),
-                limited="干员寻访" not in value["获取途径"],
+                limited="标准寻访" not in value["获取途径"] and "中坚寻访" not in value["获取途径"],
                 recruit_only=True
-                if "干员寻访" not in value["获取途径"] and "公开招募" in value["获取途径"]
+                if "标准寻访" not in value["获取途径"] and "中坚寻访" not in value["获取途径"] and "公开招募" in value["获取途径"]
                 else False,
-                event_only=True if "活动获取" in value["获取途径"] else False,
+                event_only=True 
+                if "活动获取" in value["获取途径"] 
+                else False,
+                core_only=True
+                if "标准寻访" not in value["获取途径"] and "中坚寻访" in value["获取途径"]
+                else False,
             )
             for key, value in self.load_data().items()
             if "阿米娅" not in key
@@ -177,6 +185,7 @@ class PrtsHandle(BaseHandle[Operator]):
             self.dump_data(data, f"draw_card_up/{self.game_name}_up_char.json")
 
     async def _update_info(self):
+        """更新信息"""
         info = {}
         url = "https://wiki.biligame.com/arknights/干员数据表"
         result = await self.get_url(url)
@@ -268,30 +277,32 @@ class PrtsHandle(BaseHandle[Operator]):
                     for char in chars:
                         star = char.split("（")[0].count("★")
                         name = re.split(r"[：（]", char)[1] if "★（" not in char else re.split("）：", char)[1]  # 有的括号在前面有的在后面
+                        dual_up = False
                         if "\\" in name:
                             names = name.split("\\")
+                            dual_up = True
                         elif "/" in name:
                             names = name.split("/")
+                            dual_up = True
                         else:
                             names = [name]  # 既有用/分割的，又有用\分割的
 
                         names = [name.replace("[限定]", "").strip() for name in names]
+                        zoom = 1
                         if "权值" in char:
-                            match = re.search(r"（在.*?以.*?(\d+).*?倍权值.*?）", char)
+                            zoom = 0.03
                         else:
                             match = re.search(r"（占.*?的.*?(\d+).*?%）", char)
-                        zoom = 1
-                        if match:
-                            zoom = float(match.group(1))
-                            zoom = zoom / 100 if zoom > 10 else zoom
+                            if dual_up == True:
+                                zoom = float(match.group(1))/2
+                            else:
+                                zoom = float(match.group(1))
+                            zoom = zoom / 100 if zoom > 1 else zoom
                         for name in names:
                             up_chars.append(
                                 UpChar(name=name, star=star, limited=False, zoom=zoom)
                             )
-                    if start_time <= datetime.now() <= end_time: # 跳过过时的卡池
-                        break  # 这里break会导致个问题：如果一个公告里有两个池子，会漏掉下面的池子，比如 5.19 的定向寻访。但目前我也没啥好想法解决
-                    chars: List[str] = [] # 查找下一个卡池之前清空 chars
-                    up_chars = [] # 查找下一个卡池之前清空 up_chars
+                    break  # 这里break会导致个问题：如果一个公告里有两个池子，会漏掉下面的池子，比如 5.19 的定向寻访。但目前我也没啥好想法解决
             if title and start_time and end_time:
                 if start_time <= datetime.now() <= end_time:
                     self.UP_EVENT = UpEvent(
@@ -309,6 +320,6 @@ class PrtsHandle(BaseHandle[Operator]):
         await self.update_up_char()
         self.load_up_char()
         if self.UP_EVENT:
-            return f"重载成功！\n当前UP池子：{self.UP_EVENT.title}" + image(
+            return f"重载成功！\n当前UP池子：{self.UP_EVENT.title}" + MessageSegment.image(
                 self.UP_EVENT.pool_img
             )
